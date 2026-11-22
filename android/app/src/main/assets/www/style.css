@@ -12,7 +12,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-ap
 .panel{margin:10px 12px;padding:12px;border-radius:16px;background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .search,select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0b1524;color:var(--ink);font-size:15px}
 .row{display:flex;gap:8px}
-.row select{flex:1}
+.row select{flex:1;min-width:0}
 .btn{padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:#0b1524;color:var(--ink);font-weight:700;font-size:14px}
 .btn.primary{background:var(--gold);color:#1b1405;border-color:var(--gold)}
 .btn.wide{width:100%}
