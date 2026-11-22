@@ -30,3 +30,8 @@ mark{background:#e8b84a55;color:inherit;border-radius:3px}
 .link{background:none;border:0;color:var(--teal);text-decoration:underline;font-size:12px;display:block;margin:8px auto 0}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
 .more{display:block;margin:10px auto 20px}
+.pick{display:inline-flex;margin-right:8px;vertical-align:middle}
+.pick input{width:22px;height:22px;accent-color:var(--gold)}
+.card.picked{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.bulkbar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line);z-index:10}
+body{padding-bottom:80px}

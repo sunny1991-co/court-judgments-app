@@ -77,8 +77,9 @@ function toggleSave(item) {
 function card(item, q) {
   const tags = [item.court, item.date, item.disposal].filter(Boolean).map(t => `<span class="tag">${esc(t)}</span>`).join("");
   const star = isSaved(item.id) ? "★ Saved" : "☆ Save";
-  return `<article class="card" data-id="${esc(item.id)}">
-    <h3>${highlight(item.title, q)}</h3>
+  const pick = item.pdf ? `<label class="pick"><input type="checkbox" data-pick ${selected.has(item.id) ? "checked" : ""} aria-label="Chuno"></label>` : "";
+  return `<article class="card${selected.has(item.id) ? " picked" : ""}" data-id="${esc(item.id)}">
+    <h3>${pick}${highlight(item.title, q)}</h3>
     <div>${tags}</div>
     ${item.judge ? `<p class="meta">👨‍⚖️ ${highlight(item.judge, q)}</p>` : ""}
     ${item.extra ? `<p class="meta">${highlight(item.extra, q)}</p>` : ""}
@@ -92,14 +93,63 @@ function card(item, q) {
     </div></article>`;
 }
 
+// --- bulk select + download (tick the boxes, or "Sab chuno") ---
+const selected = new Set();
+const BULK_MAX = 1000;
+function bulkBar() {
+  let bar = $("#bulk");
+  const withPdf = results.filter(r => r.pdf).length;
+  if (!withPdf) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = document.createElement("div"); bar.id = "bulk"; bar.className = "bulkbar"; document.body.appendChild(bar); }
+  const n = [...selected].filter(id => results.some(r => r.id === id)).length;
+  bar.innerHTML = `<button class="btn" id="ball">☑️ Sab chuno (${withPdf.toLocaleString("en-IN")})</button>
+    ${n ? `<button class="btn" id="bnone">✕ Hatao</button><button class="btn primary" id="bdl">⬇️ Download (${n})</button>` : `<span class="meta">Judgment pe ☐ tick karo</span>`}`;
+  $("#ball").onclick = () => { results.forEach(r => { if (r.pdf) selected.add(r.id); }); refreshPicks(); };
+  const bn = $("#bnone"); if (bn) bn.onclick = () => { selected.clear(); refreshPicks(); };
+  const bd = $("#bdl"); if (bd) bd.onclick = () => bulkDownload(bd);
+}
+function refreshPicks() {
+  document.querySelectorAll("#results .card").forEach(c => {
+    const on = selected.has(c.dataset.id); c.classList.toggle("picked", on);
+    const cb = c.querySelector("[data-pick]"); if (cb) cb.checked = on;
+  });
+  bulkBar();
+}
+async function bulkDownload(btn) {
+  const items = results.filter(r => r.pdf && selected.has(r.id));
+  if (!items.length) return;
+  if (items.length > BULK_MAX) { status(`⚠️ Ek baar mein ${BULK_MAX} tak. Abhi ${items.length.toLocaleString("en-IN")} chune hain — search ya saal chhota karo, ya kuch hatao.`); return; }
+  const mb = Math.round(items.length * 0.25);
+  if (!btn.dataset.sure) { btn.dataset.sure = "1"; btn.textContent = `⚠️ ${items.length} PDF (~${mb} MB) — pakka? Dobara dabao`; setTimeout(() => { delete btn.dataset.sure; bulkBar(); }, 5000); return; }
+  btn.disabled = true;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const nm = (it.fileName || it.title).slice(0, 80);
+    if (N.downloadQuiet) N.downloadQuiet(it.pdf, nm); else N.download(it.pdf, nm);
+    if (i % 5 === 4 || i === items.length - 1) status(`⬇️ ${i + 1}/${items.length} download queue mein daale — Downloads/Judgments mein aayenge`);
+    await new Promise(r => setTimeout(r, 350));
+  }
+  status(`✅ ${items.length} PDF download shuru — notification mein progress dikhega. Folder: Downloads/Judgments`);
+  selected.clear(); refreshPicks();
+}
+
 function render(q) {
   const box = $("#results");
+  setTimeout(bulkBar, 0);
   if (!results.length) { box.innerHTML = `<p class="empty">Kuch nahi mila. Doosre shabd ya saal try karo.</p>`; return; }
   box.innerHTML = results.slice(0, shown).map(r => card(r, q)).join("") +
     (shown < results.length ? `<button class="btn more" id="more">Aur dikhao (${results.length - shown} baaki)</button>` : "");
   const more = $("#more");
   if (more) more.onclick = () => { shown += PAGE; render(q); };
 }
+
+$("#view").addEventListener("change", e => {
+  if (!e.target.matches("[data-pick]")) return;
+  const id = e.target.closest(".card").dataset.id;
+  if (e.target.checked) selected.add(id); else selected.delete(id);
+  e.target.closest(".card").classList.toggle("picked", e.target.checked);
+  bulkBar();
+});
 
 $("#view").addEventListener("click", e => {
   const b = e.target.closest("button[data-act]");
@@ -218,7 +268,8 @@ function showSaved() {
 function route() {
   const tab = (location.hash || "#sc").slice(1);
   document.querySelectorAll(".tabs a").forEach(a => a.classList.toggle("on", a.dataset.tab === tab));
-  results = []; shown = 0;
+  results = []; shown = 0; selected.clear();
+  const bar = $("#bulk"); if (bar) bar.remove();
   if (tab === "hc") showHC(); else if (tab === "saved") showSaved(); else showSC();
 }
 
