@@ -20,12 +20,13 @@
 
 <template id="tpl-sc">
   <section class="panel">
-    <input id="q" class="search" type="search" placeholder="Party naam, case number, vishay ya judge…" autocomplete="off">
+    <input id="q" class="search" type="search" placeholder="Party / case no. / vishay — Hindi ya English (जैसे: राम लाल, जमानत)" autocomplete="off">
     <div class="row">
       <select id="from" aria-label="Se saal"></select>
       <select id="to" aria-label="Tak saal"></select>
     </div>
     <button id="go" class="btn primary wide">🔍 Dhoondho</button>
+    <p class="hint">🔤 Hindi ya English dono mein likh sakte ho.</p>
     <p class="hint" id="status">Supreme Court ke ~43,000 judgments (1950 se). Pehli baar data download hoga, phir phone mein rahega.</p>
   </section>
   <div id="results"></div>
@@ -35,7 +36,7 @@
   <section class="panel">
     <select id="court" aria-label="High Court"></select>
     <select id="year" aria-label="Saal"></select>
-    <input id="q" class="search" type="search" placeholder="Party naam, case number, vishay ya judge…" autocomplete="off">
+    <input id="q" class="search" type="search" placeholder="Party / case no. / vishay — Hindi ya English (जैसे: राम लाल, जमानत)" autocomplete="off">
     <button id="go" class="btn primary wide">🔍 Dhoondho</button>
     <p class="hint" id="status">Court aur saal chuno. Us saal ki list download hogi, phir uske andar search.</p>
   </section>
@@ -52,6 +53,7 @@
   Ye official court app nahi hai — zaroori kaam ke liye court ki website se milaan karein.
   <button id="refresh" class="link">Data refresh karo</button>
 </footer>
+<script src="hindi.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
