@@ -28,13 +28,32 @@ async function getManifest() {
 
 // --- search: every word must appear somewhere in the row (case-insensitive) ---
 function norm(s) { return String(s || "").toLowerCase().replace(/[.,/()\-_:]/g, " ").replace(/\s+/g, " "); }
+// Search: every word must match. English words: substring. Hindi words: legal
+// dictionary (any English synonym) or sound-match of the transliterated word.
+function itemSkel(it) {
+  if (it.skel === undefined) it.skel = " " + it.text.split(" ").map(HINDI.skel).join(" ") + " ";
+  return it.skel;
+}
 function matcher(q) {
-  const words = norm(q).split(" ").filter(w => w.length > 0);
-  return text => words.every(w => text.includes(w));
+  const parts = HINDI.words(q).map(p => {
+    if (p.plain !== undefined) { const w = norm(p.plain).trim(); return it => !w || it.text.includes(w); }
+    if (p.any) { const alts = p.any.map(norm); return it => alts.some(a => it.text.includes(a)); }
+    return it => !p.sk || itemSkel(it).includes(" " + p.sk + " ");
+  });
+  return it => parts.every(f => f(it));
+}
+function hlWords(q) {
+  const out = [];
+  HINDI.words(q).forEach(p => {
+    if (p.plain !== undefined) out.push(...norm(p.plain).split(" "));
+    else if (p.any) out.push(...p.any);
+    else if (p.latin) out.push(p.latin.replace(/aa/g, "a"));
+  });
+  return out.filter(w => w && w.length > 1);
 }
 function highlight(text, q) {
   let out = esc(text);
-  norm(q).split(" ").filter(w => w.length > 1).forEach(w => {
+  hlWords(q).forEach(w => {
     out = out.replace(new RegExp("(" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "ig"), "<mark>$1</mark>");
   });
   return out;
@@ -124,7 +143,7 @@ async function showSC() {
     if (!data.items) data.items = data.rows.map(scItem);
     const a = Math.min(+from.value, +to.value), b = Math.max(+from.value, +to.value);
     const ok = q ? matcher(q) : () => true;
-    results = data.items.filter(it => { const y = +it.date.slice(0, 4); return y >= a && y <= b && ok(it.text); });
+    results = data.items.filter(it => { const y = +it.date.slice(0, 4); return y >= a && y <= b && ok(it); });
     shown = PAGE;
     status(`${results.length.toLocaleString("en-IN")} judgments mile` + (q ? ` "${esc(q)}" ke liye` : ""));
     render(q);
@@ -168,7 +187,7 @@ async function showHC() {
       if (s.files.length > 1) busy(`${esc(c.name)} ${esc(s.label)} — hissa ${k + 1}/${s.files.length}…`);
       let data;
       try { data = await getJSON(s.files[k]); } catch (e) { status("❌ Data download nahi hua. Internet check karo."); return; }
-      for (const r of data.rows) { const it = hcItem(r, c); if (ok(it.text)) results.push(it); }
+      for (const r of data.rows) { const it = hcItem(r, c); if (ok(it)) results.push(it); }
       if (s.files.length > 1) delete cache[s.files[k]];
     }
     shown = PAGE;
