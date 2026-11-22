@@ -167,6 +167,24 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> openExternal(url));
         }
 
+        /** Official court websites only (to cross-check a judgment by its CNR). */
+        @JavascriptInterface
+        public void openOfficial(String url, String cnr) {
+            if (url == null || !(url.startsWith("https://services.ecourts.gov.in/")
+                    || url.startsWith("https://judgments.ecourts.gov.in/")
+                    || url.startsWith("https://www.sci.gov.in/"))) return;
+            runOnUiThread(() -> {
+                if (cnr != null && !cnr.isEmpty()) {
+                    android.content.ClipboardManager cm =
+                            (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("CNR", cnr));
+                    Toast.makeText(MainActivity.this, "CNR copy ho gaya: " + cnr + " — official site pe paste karo",
+                            Toast.LENGTH_LONG).show();
+                }
+                openExternal(url);
+            });
+        }
+
         @JavascriptInterface
         public void download(String url, String name) {
             if (!allowed(url)) return;
