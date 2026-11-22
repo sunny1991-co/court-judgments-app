@@ -1,0 +1,41 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/apk.yml"]
+permissions:
+  contents: write
+concurrency:
+  group: apk
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build release APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: gradle --no-daemon assembleRelease
+      - name: Publish to release app-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk CourtJudgments.apk
+          gh release view app-latest >/dev/null 2>&1 || gh release create app-latest --title "Court Judgments app (APK)" --notes "Phone pe install karne ke liye CourtJudgments.apk download karo." --latest
+          gh release upload app-latest CourtJudgments.apk --clobber
+          gh release edit app-latest --notes "Version 1.${{ github.run_number }} — phone pe install karne ke liye neeche CourtJudgments.apk download karo."
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CourtJudgments-apk
+          path: CourtJudgments.apk
