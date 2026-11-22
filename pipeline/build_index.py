@@ -23,7 +23,8 @@ import duckdb
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "out")
 SC = "s3://indian-supreme-court-judgments/metadata/parquet/*/*.parquet"
 HC = "s3://indian-high-court-judgments/metadata/parquet/*/*/*/*.parquet"
-DESC_SC, DESC_HC = 300, 260
+DESC_SC, DESC_HC = 300, 200
+PART_ROWS = 60_000  # keep each file small enough for a phone to open
 DECADE_BEFORE = 2000  # older years are grouped by decade
 
 con = duckdb.connect()
@@ -115,9 +116,13 @@ def main() -> int:
         shards = []
         for label in sorted(groups, reverse=True):
             rows = sorted(groups[label], key=lambda r: r[3], reverse=True)
-            fname = f"hc_{code}_{label}.json.gz"
-            size = write(fname, ["title", "judge", "cnr", "date", "disposal", "desc", "bench", "file", "year"], rows)
-            shards.append({"label": label, "file": fname, "count": len(rows), "bytes": size})
+            files, size = [], 0
+            for k in range(0, len(rows), PART_ROWS):
+                fname = f"hc_{code}_{label}_{k // PART_ROWS + 1}.json.gz"
+                size += write(fname, ["title", "judge", "cnr", "date", "disposal", "desc", "bench", "file", "year"],
+                              rows[k:k + PART_ROWS])
+                files.append(fname)
+            shards.append({"label": label, "files": files, "count": len(rows), "bytes": size})
             total += len(rows)
         del groups
         manifest["hc"].append({"code": code, "name": name, "shards": shards})
