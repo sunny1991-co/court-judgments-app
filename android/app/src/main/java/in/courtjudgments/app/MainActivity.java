@@ -185,23 +185,35 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Same as download() but without a toast each time (for bulk downloads). */
+        @JavascriptInterface
+        public void downloadQuiet(String url, String name) {
+            if (!allowed(url)) return;
+            runOnUiThread(() -> enqueue(url, name, false));
+        }
+
         @JavascriptInterface
         public void download(String url, String name) {
             if (!allowed(url)) return;
-            runOnUiThread(() -> {
+            runOnUiThread(() -> enqueue(url, name, true));
+        }
+
+        private void enqueue(String url, String name, boolean toast) {
+            {
                 try {
                     String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
                     if (!safe.toLowerCase().endsWith(".pdf")) safe += ".pdf";
                     DownloadManager.Request r = new DownloadManager.Request(Uri.parse(url))
                             .setTitle(safe)
-                            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                            .setNotificationVisibility(toast ? DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                                    : DownloadManager.Request.VISIBILITY_VISIBLE)
                             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Judgments/" + safe);
                     ((DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE)).enqueue(r);
-                    Toast.makeText(MainActivity.this, "Download shuru: Downloads/Judgments", Toast.LENGTH_SHORT).show();
+                    if (toast) Toast.makeText(MainActivity.this, "Download shuru: Downloads/Judgments", Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "Download nahi hua", Toast.LENGTH_SHORT).show();
+                    if (toast) Toast.makeText(MainActivity.this, "Download nahi hua", Toast.LENGTH_SHORT).show();
                 }
-            });
+            }
         }
 
         @JavascriptInterface
