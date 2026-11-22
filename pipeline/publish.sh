@@ -23,7 +23,12 @@ fail=0
 for f in out/*; do [ "$(basename "$f")" = manifest.json ] || upload "$f" || fail=1; done
 [ $fail -eq 0 ] || { echo "some uploads failed; manifest NOT updated"; exit 1; }
 upload out/manifest.json || exit 1
-# remove assets that are no longer produced
+# remove assets that are no longer produced - but never if this build looks
+# much smaller than what is published (a source hiccup must not wipe data)
+old_n=${#have[@]}; new_n=$(ls out | wc -l)
+if [ "$old_n" -gt 0 ] && [ $((new_n * 100)) -lt $((old_n * 90)) ]; then
+  echo "new build has $new_n files vs $old_n published: keeping old files"; exit 0
+fi
 gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r a; do
   [ -f "out/$a" ] || { gh release delete-asset "$TAG" "$a" -y; sleep 2; }
 done
