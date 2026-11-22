@@ -86,6 +86,7 @@ function card(item, q) {
     <div class="actions">
       ${item.pdf ? `<button class="btn primary" data-act="open">📄 PDF kholo</button>
       <button class="btn" data-act="dl">⬇️ Download</button>` : `<span class="meta">PDF uplabdh nahi</span>`}
+      ${item.cnr ? `<button class="btn" data-act="official">✔️ Official check</button>` : ""}
       <button class="btn" data-act="save">${star}</button>
       <button class="btn" data-act="share">↗️</button>
     </div></article>`;
@@ -109,6 +110,12 @@ $("#view").addEventListener("click", e => {
   const act = b.dataset.act;
   if (act === "open") N.openPdf(item.pdf);
   if (act === "dl") N.download(item.pdf, (item.fileName || item.title).slice(0, 80));
+  if (act === "official") {
+    // Cross-check on the court's own site: CNR is copied, the official search page opens.
+    const url = item.id.startsWith("sc:") ? "https://www.sci.gov.in/judgements-case-no/"
+      : "https://services.ecourts.gov.in/ecourtindia_v6/";
+    if (N.openOfficial) N.openOfficial(url, item.cnr);
+  }
   if (act === "share") N.share(`${item.title}\n${item.court} · ${item.date}\n${item.pdf || ""}`);
   if (act === "save") { toggleSave(item); b.textContent = isSaved(item.id) ? "★ Saved" : "☆ Save"; }
 });
@@ -120,6 +127,7 @@ function scItem(r) {
     id: "sc:" + (cnr || path), court: "Supreme Court", title: title || `${pet} vs ${res}`,
     date, disposal: disp, judge, desc,
     extra: [caseId, cit, cnr].filter(Boolean).join(" · "),
+    cnr: cnr || "",
     pdf: path ? `${SC_PDF}year=${year}/english/${path}_EN.pdf` : "",
     fileName: `SC_${date}_${(caseId || cnr || path).replace(/\s+/g, "")}`,
     text: norm([title, pet, res, judge, cit, caseId, cnr, desc, disp].join(" ")),
@@ -158,6 +166,7 @@ function hcItem(r, court) {
   return {
     id: "hc:" + (cnr || file) + ":" + date, court: court.name, title, date, disposal: disp, judge, desc,
     extra: [cnr, bench].filter(Boolean).join(" · "),
+    cnr: cnr || "",
     pdf: file ? `${HC_PDF}year=${year}/court=${court.code}/bench=${bench}/${file}` : "",
     fileName: `${court.code}_${date}_${cnr || file}`,
     text: norm([title, judge, cnr, desc, disp].join(" ")),
