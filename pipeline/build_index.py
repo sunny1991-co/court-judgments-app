@@ -41,8 +41,9 @@ def clean(s, n=None):
 
 def write(name: str, cols: list, rows: list) -> int:
     path = OUT / name
-    with gzip.open(path, "wt", encoding="utf-8", compresslevel=9) as fh:
-        json.dump({"cols": cols, "rows": rows}, fh, ensure_ascii=False, separators=(",", ":"))
+    # mtime=0: same data -> same bytes, so unchanged files need no re-upload
+    with open(path, "wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=9, mtime=0) as gz:
+        gz.write(json.dumps({"cols": cols, "rows": rows}, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
     return path.stat().st_size
 
 
