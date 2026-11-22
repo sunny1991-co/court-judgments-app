@@ -86,7 +86,8 @@ function card(item, q) {
     ${item.desc ? `<p class="desc">${highlight(item.desc, q)}</p>` : ""}
     <div class="actions">
       ${item.pdf ? `<button class="btn primary" data-act="open">📄 PDF kholo</button>
-      <button class="btn" data-act="dl">⬇️ Download</button>` : `<span class="meta">PDF uplabdh nahi</span>`}
+      <button class="btn" data-act="dl">⬇️ Download</button>
+      <button class="btn" data-act="saar">🈯 Hindi / saar</button>` : `<span class="meta">PDF uplabdh nahi</span>`}
       ${item.cnr ? `<button class="btn" data-act="official">✔️ Official check</button>` : ""}
       <button class="btn" data-act="save">${star}</button>
       <button class="btn" data-act="share">↗️</button>
@@ -166,6 +167,7 @@ $("#view").addEventListener("click", e => {
       : "https://services.ecourts.gov.in/ecourtindia_v6/";
     if (N.openOfficial) N.openOfficial(url, item.cnr);
   }
+  if (act === "saar") AI.open(item);
   if (act === "share") N.share(`${item.title}\n${item.court} · ${item.date}\n${item.pdf || ""}`);
   if (act === "save") { toggleSave(item); b.textContent = isSaved(item.id) ? "★ Saved" : "☆ Save"; }
 });

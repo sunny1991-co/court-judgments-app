@@ -18,6 +18,8 @@ import android.widget.Toast;
 
 import androidx.webkit.WebViewAssetLoader;
 
+import org.json.JSONObject;
+
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -156,11 +158,109 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (web != null && web.canGoBack()) web.goBack();
-        else super.onBackPressed();
+        if (web == null) { super.onBackPressed(); return; }
+        web.evaluateJavascript("window.aiBack&&window.aiBack()", v -> {
+            if ("true".equals(v)) return;
+            if (web.canGoBack()) web.goBack(); else finish();
+        });
+    }
+
+    private void cb(String id, JSONObject o) {
+        final String js = "window.NativeCb&&window.NativeCb(" + JSONObject.quote(id) + "," + o.toString() + ")";
+        runOnUiThread(() -> web.evaluateJavascript(js, null));
     }
 
     class Bridge {
+        /** Gemini API only (the user's own key, entered in this app). */
+        @JavascriptInterface
+        public void aiPost(String id, String url, String key, String body) {
+            new Thread(() -> {
+                JSONObject o = new JSONObject();
+                try {
+                    if (url == null || !url.startsWith("https://generativelanguage.googleapis.com/")) throw new SecurityException("not allowed");
+                    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                    c.setConnectTimeout(20000);
+                    c.setReadTimeout(240000);
+                    c.setRequestProperty("Content-Type", "application/json");
+                    c.setRequestProperty("x-goog-api-key", key == null ? "" : key);
+                    if (body != null && !body.isEmpty()) {
+                        c.setRequestMethod("POST");
+                        c.setDoOutput(true);
+                        try (OutputStream os = c.getOutputStream()) { os.write(body.getBytes(StandardCharsets.UTF_8)); }
+                    }
+                    int code = c.getResponseCode();
+                    InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+                    java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                    if (in != null) {
+                        byte[] buf = new byte[16384];
+                        int n;
+                        while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+                        in.close();
+                    }
+                    o.put("status", code);
+                    o.put("text", new String(bo.toByteArray(), StandardCharsets.UTF_8));
+                } catch (Exception e) {
+                    try { o.put("status", 0); o.put("text", String.valueOf(e.getMessage())); } catch (Exception ignored) { }
+                }
+                cb(id, o);
+            }).start();
+        }
+
+        /** A judgment PDF (allowed dataset hosts only) as base64, max 20 MB. */
+        @JavascriptInterface
+        public void fetchPdf(String id, String url) {
+            new Thread(() -> {
+                JSONObject o = new JSONObject();
+                try {
+                    if (!allowed(url)) throw new SecurityException("not allowed");
+                    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                    c.setConnectTimeout(20000);
+                    c.setReadTimeout(120000);
+                    int code = c.getResponseCode();
+                    if (code != 200) throw new IllegalStateException("HTTP " + code);
+                    java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                    try (InputStream in = c.getInputStream()) {
+                        byte[] buf = new byte[65536];
+                        int n;
+                        while ((n = in.read(buf)) > 0) {
+                            bo.write(buf, 0, n);
+                            if (bo.size() > 20 * 1024 * 1024) throw new IllegalStateException("PDF 20 MB se badi");
+                        }
+                    }
+                    o.put("b64", android.util.Base64.encodeToString(bo.toByteArray(), android.util.Base64.NO_WRAP));
+                } catch (Exception e) {
+                    try { o.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { }
+                }
+                cb(id, o);
+            }).start();
+        }
+
+        /** Save a text file (translation / summary) to Downloads/Judgments. */
+        @JavascriptInterface
+        public void saveText(String id, String name, String text) {
+            new Thread(() -> {
+                boolean ok = false;
+                try {
+                    String safe = name.replaceAll("[^A-Za-z0-9._-]", "_");
+                    byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        android.content.ContentValues cv = new android.content.ContentValues();
+                        cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, safe);
+                        cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                        cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Judgments");
+                        Uri u = getContentResolver().insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                        if (u != null) try (OutputStream os = getContentResolver().openOutputStream(u)) { os.write(bytes); ok = true; }
+                    } else {
+                        File dir = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "Judgments");
+                        if (dir.exists() || dir.mkdirs()) try (OutputStream os = new FileOutputStream(new File(dir, safe))) { os.write(bytes); ok = true; }
+                    }
+                } catch (Exception ignored) { }
+                JSONObject o = new JSONObject();
+                try { o.put("ok", ok); } catch (Exception ignored) { }
+                cb(id, o);
+            }).start();
+        }
+
         @JavascriptInterface
         public void openPdf(String url) {
             if (!allowed(url)) return;

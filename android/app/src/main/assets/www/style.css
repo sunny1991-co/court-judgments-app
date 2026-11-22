@@ -35,3 +35,14 @@ mark{background:#e8b84a55;color:inherit;border-radius:3px}
 .card.picked{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
 .bulkbar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--panel);border-top:1px solid var(--line);z-index:10}
 body{padding-bottom:80px}
+[hidden]{display:none !important}
+.aio{position:fixed;inset:0;background:#000a;z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.aio-in{background:var(--panel);width:100%;max-width:720px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:14px;border:1px solid var(--line)}
+.aio-in h3{margin:0 0 4px;font-size:15px}
+.aio-in a{color:var(--teal)}
+.aiout{font-size:14.5px;line-height:1.6;margin-top:8px}
+.aiout h2,.aiout h3,.aiout h4{font-size:15px;color:var(--gold);margin:12px 0 4px}
+.aiout table{border-collapse:collapse;display:block;overflow:auto}.aiout td,.aiout th{border:1px solid var(--line);padding:4px 6px}
+.dots{display:inline-flex;gap:4px;vertical-align:middle}.dots i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:dotb 1.2s infinite}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+@keyframes dotb{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
