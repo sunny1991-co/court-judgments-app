@@ -11,7 +11,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,10 +22,4 @@ jobs:
       - name: Publish to release data-latest
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view data-latest >/dev/null 2>&1 || gh release create data-latest --title "Judgment data" --notes "Search data for the app (auto-built weekly)." --latest=false
-          gh release upload data-latest out/* --clobber
-          # remove assets that are no longer produced
-          gh release view data-latest --json assets --jq '.assets[].name' | while read -r a; do
-            [ -f "out/$a" ] || gh release delete-asset data-latest "$a" -y
-          done
+        run: bash pipeline/publish.sh
