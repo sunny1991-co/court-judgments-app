@@ -67,35 +67,47 @@ def sc() -> dict:
             "years": [years[0], years[-1]] if years else []}
 
 
-def hc_courts() -> list[str]:
-    """Court folders (court=XX_YY) from the bucket listing."""
+def hc_files() -> dict[str, list[str]]:
+    """All metadata parquet files per court (court=XX_YY) from the bucket listing."""
     import subprocess
     out = subprocess.run(["aws", "s3", "ls", "--no-sign-request", "--recursive",
                           "s3://indian-high-court-judgments/metadata/parquet/"],
                          capture_output=True, text=True, check=True).stdout
-    return sorted(set(re.findall(r"court=([0-9]+_[0-9]+)/", out)))
+    files: dict[str, list[str]] = {}
+    for line in out.splitlines():
+        key = line.split()[-1] if line.strip() else ""
+        m = re.search(r"court=([0-9]+_[0-9]+)/", key)
+        if m and key.endswith(".parquet"):
+            files.setdefault(m.group(1), []).append("s3://indian-high-court-judgments/" + key)
+    return files
 
 
-def hc_court(code: str) -> tuple[str, dict]:
+BAD_FILES: list[str] = []
+
+
+def hc_court(code: str, files: list[str]) -> tuple[str, dict]:
     """All rows of one High Court, grouped by year (or decade for old years).
-    Court/bench/year come from the file path (not the hive columns)."""
-    glob = f"s3://indian-high-court-judgments/metadata/parquet/*/court={code}/*/*.parquet"
-    q = f"""SELECT filename, title, judge, cnr, decision_date, disposal_nature, description, pdf_link, court
-            FROM read_parquet('{glob}', hive_partitioning=false, union_by_name=true, filename=true)"""
+    One file at a time: a damaged file is skipped and reported, not fatal."""
     groups, names = {}, {}
-    cur = con.execute(q)
-    while True:
-        chunk = cur.fetchmany(100_000)
-        if not chunk:
-            break
-        for fn, t, j, cnr, d, disp, desc, link, cname in chunk:
-            m = re.search(r"year=(\d{4})/court=[^/]+/bench=([^/]+)/", fn or "")
-            if not m:
-                continue
-            year, bench = int(m.group(1)), m.group(2)
+    for f in files:
+        m = re.search(r"year=(\d{4})/court=[^/]+/bench=([^/]+)/", f)
+        if not m:
+            continue
+        year, bench = int(m.group(1)), m.group(2)
+        label = str(year) if year >= DECADE_BEFORE else f"{year // 10 * 10}s"
+        try:
+            have = {r[0] for r in con.execute(
+                f"DESCRIBE SELECT * FROM read_parquet('{f}', hive_partitioning=false)").fetchall()}
+            want = ["title", "judge", "cnr", "decision_date", "disposal_nature", "description", "pdf_link", "court"]
+            sel = ", ".join(c if c in have else f"NULL AS {c}" for c in want)  # mobile files lack some columns
+            rows = con.execute(f"SELECT {sel} FROM read_parquet('{f}', hive_partitioning=false)").fetchall()
+        except Exception as exc:  # damaged / unreadable file
+            BAD_FILES.append(f"{f}: {type(exc).__name__}")
+            print("SKIP", f, type(exc).__name__, str(exc)[:120], flush=True)
+            continue
+        for t, j, cnr, d, disp, desc, link, cname in rows:
             if cname:
                 names[cname] = names.get(cname, 0) + 1
-            label = str(year) if year >= DECADE_BEFORE else f"{year // 10 * 10}s"
             iso = d.date().isoformat() if hasattr(d, "date") else str(d or "")[:10]
             file = os.path.basename(str(link)) if link else ""
             groups.setdefault(label, []).append(
@@ -111,8 +123,8 @@ def main() -> int:
                 "sc": sc(), "hc": []}
     print("SC", manifest["sc"], flush=True)
     total = 0
-    for code in hc_courts():
-        name, groups = hc_court(code)
+    for code, files in sorted(hc_files().items()):
+        name, groups = hc_court(code, files)
         shards = []
         for label in sorted(groups, reverse=True):
             rows = sorted(groups[label], key=lambda r: r[3], reverse=True)
@@ -129,6 +141,7 @@ def main() -> int:
         print("HC", code, name, sum(x["count"] for x in shards), flush=True)
     manifest["hc"].sort(key=lambda c: c["name"])
     manifest["hc_count"] = total
+    manifest["skipped_damaged_files"] = BAD_FILES
     (OUT / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
     files = len(list(OUT.iterdir()))
     print("FILES", files, "HC rows", total)
