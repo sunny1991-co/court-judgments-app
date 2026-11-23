@@ -34,7 +34,13 @@ function itemSkel(it) {
   if (it.skel === undefined) it.skel = " " + it.text.split(" ").map(HINDI.skel).join(" ") + " ";
   return it.skel;
 }
+// CNR: 4 letters + 12 digits (e.g. UPHC010012342024); last 4 digits = filing year
+function cnrOf(q) { const s = String(q || "").replace(/[\s\-\/]/g, "").toUpperCase(); return /^[A-Z]{4}\d{12}$/.test(s) ? s : ""; }
+function inDates(it, d1, d2) { const d = String(it.date || "").slice(0, 10); return (!d1 || d >= d1) && (!d2 || d <= d2); }
+
 function matcher(q) {
+  const cnr = cnrOf(q);
+  if (cnr) return it => String(it.cnr || "").toUpperCase() === cnr;
   const parts = HINDI.words(q).map(p => {
     if (p.plain !== undefined) { const w = norm(p.plain).trim(); return it => !w || it.text.includes(w); }
     if (p.any) { const alts = p.any.map(norm); return it => alts.some(a => it.text.includes(a)); }
@@ -201,9 +207,11 @@ async function showSC() {
     let data;
     try { data = await getJSON(m ? m.sc.file : "sc.json.gz"); } catch (e) { status("❌ Data download nahi hua. Internet check karo."); return; }
     if (!data.items) data.items = data.rows.map(scItem);
-    const a = Math.min(+from.value, +to.value), b = Math.max(+from.value, +to.value);
+    let a = Math.min(+from.value, +to.value), b = Math.max(+from.value, +to.value);
+    const d1 = $("#d1").value, d2 = $("#d2").value;
+    if (d1 || d2) { a = d1 ? +d1.slice(0, 4) : a; b = d2 ? +d2.slice(0, 4) : b; } // calendar dates win over year boxes
     const ok = q ? matcher(q) : () => true;
-    results = data.items.filter(it => { const y = +it.date.slice(0, 4); return y >= a && y <= b && ok(it); });
+    results = data.items.filter(it => { const y = +it.date.slice(0, 4); return y >= a && y <= b && inDates(it, d1, d2) && ok(it); });
     shown = PAGE;
     status(`${results.length.toLocaleString("en-IN")} judgments mile` + (q ? ` "${esc(q)}" ke liye` : ""));
     render(q);
@@ -238,8 +246,66 @@ async function showHC() {
   };
   court.onchange = fillYears; fillYears();
   status(`${m.hc.length} High Courts · ${(m.hc_count || 0).toLocaleString("en-IN")} judgments · data ${m.updated_utc.slice(0, 10)}`);
+  // --- modes: name (one year) / date (calendar range) / cnr (exact) ---
+  let mode = "name";
+  const setMode = md => {
+    mode = md;
+    document.querySelectorAll(".modes button").forEach(b => b.classList.toggle("on", b.dataset.mode === md));
+    document.querySelectorAll("[data-show]").forEach(e => { e.hidden = e.dataset.show !== md; });
+    $("#q").placeholder = md === "cnr" ? "CNR number (jaise UPHC010012342024)" : md === "date" ? "Naam / vishay (khaali chhodo to us tareekh ke sab)" : "Party / case no. / vishay — Hindi ya English (जैसे: राम लाल, जमानत)";
+  };
+  document.querySelectorAll(".modes button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  const shardYears = s => /^\d{4}$/.test(s.label) ? [+s.label, +s.label] : /^(\d{3})0s$/.test(s.label) ? [+s.label.slice(0, 4), +s.label.slice(0, 4) + 9] : [0, 9999];
+  const learn = (c, rows) => { // remember which CNR prefix belongs to which court
+    try { const map = JSON.parse(localStorage.getItem("cnrPrefix") || "{}"); const r = rows.find(x => x[2]); if (r) { map[String(r[2]).slice(0, 4).toUpperCase()] = c.code; localStorage.setItem("cnrPrefix", JSON.stringify(map)); } } catch (e) { /* ignore */ }
+  };
+  // open shards one part at a time; keep matches; stop early when asked
+  const scan = async (c, shards, ok, label, stopWhenFound) => {
+    results = [];
+    for (let i = 0; i < shards.length; i++) {
+      const s = shards[i];
+      for (let k = 0; k < s.files.length; k++) {
+        busy(`${esc(c.name)} — ${esc(label)} · ${esc(s.label)} (${i + 1}/${shards.length})${s.files.length > 1 ? ` hissa ${k + 1}/${s.files.length}` : ""}…`);
+        let data;
+        try { data = await getJSON(s.files[k]); } catch (e) { status("❌ Data download nahi hua. Internet check karo."); return false; }
+        learn(c, data.rows);
+        for (const r of data.rows) { const it = hcItem(r, c); if (ok(it)) results.push(it); }
+        if (s.files.length > 1 || shards.length > 1) delete cache[s.files[k]];
+      }
+      if (stopWhenFound && results.length) break;
+    }
+    return true;
+  };
+
   const run = async () => {
-    const c = m.hc[+court.value], s = c.shards[+year.value], q = $("#q").value.trim();
+    const c = m.hc[+court.value], q = $("#q").value.trim();
+    if (mode === "date") {
+      const d1 = $("#d1").value, d2 = $("#d2").value || d1;
+      if (!d1) { status("📅 Pehle 'Se' tareekh chuno"); return; }
+      const lo = +d1.slice(0, 4), hi = +d2.slice(0, 4);
+      const shards = c.shards.filter(s => { const [a, b] = shardYears(s); return b >= Math.min(lo, hi) && a <= Math.max(lo, hi); });
+      if (!shards.length) { status("Is tareekh ka data is court mein nahi hai"); return; }
+      const okq = q ? matcher(q) : () => true;
+      if (!(await scan(c, shards, it => inDates(it, d1 <= d2 ? d1 : d2, d1 <= d2 ? d2 : d1) && okq(it), "tareekh", false))) return;
+      results.sort((x, y) => String(y.date).localeCompare(String(x.date)));
+      shown = PAGE;
+      status(`${results.length.toLocaleString("en-IN")} judgments mile — ${esc(c.name)}, ${d1}${d2 !== d1 ? " se " + d2 : ""}` + (q ? ` · "${esc(q)}"` : ""));
+      render(q); return;
+    }
+    if (mode === "cnr") {
+      const cnr = cnrOf(q);
+      if (!cnr) { status("🆔 Sahi CNR likho: 4 akshar + 12 ank (jaise UPHC010012342024)"); return; }
+      let cc = c;
+      try { const map = JSON.parse(localStorage.getItem("cnrPrefix") || "{}"); const code = map[cnr.slice(0, 4)]; const idx = m.hc.findIndex(x => x.code === code); if (idx >= 0) { cc = m.hc[idx]; court.value = idx; fillYears(); } } catch (e) { /* ignore */ }
+      const fy = +cnr.slice(-4);
+      // decided in the filing year or later: newest data last, oldest first from the filing year
+      const shards = cc.shards.filter(s => shardYears(s)[1] >= fy).sort((x, y) => shardYears(x)[0] - shardYears(y)[0]);
+      if (!(await scan(cc, shards, it => String(it.cnr || "").toUpperCase() === cnr, "CNR " + cnr, true))) return;
+      shown = PAGE;
+      status(results.length ? `🆔 ${cnr} — ${results.length} judgment mila (${esc(cc.name)})` : `🆔 ${cnr} — ${esc(cc.name)} mein nahi mila. Court sahi chuna hai? (CNR ke pehle 4 akshar court batate hain)`);
+      render(""); return;
+    }
+    const s = c.shards[+year.value];
     busy(`${esc(c.name)} ${esc(s.label)} ka data khul raha hai… (${(s.bytes / 1e6).toFixed(1)} MB)`);
     const ok = q ? matcher(q) : () => true;
     results = [];
