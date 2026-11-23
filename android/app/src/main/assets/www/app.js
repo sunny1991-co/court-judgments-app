@@ -81,7 +81,8 @@ function toggleSave(item) {
 
 // --- result rendering ---
 function card(item, q) {
-  const tags = [item.court, item.date, item.disposal].filter(Boolean).map(t => `<span class="tag">${esc(t)}</span>`).join("");
+  const tags = [item.court, item.date, item.disposal].filter(Boolean).map(t => `<span class="tag">${esc(t)}</span>`).join("") +
+    subjectsOf(item).filter(s => s !== "other").slice(0, 2).map(s => `<span class="tag subj-tag">${esc(SUBJECT_NAME[s])}</span>`).join("");
   const star = isSaved(item.id) ? "★ Saved" : "☆ Save";
   const pick = item.pdf ? `<label class="pick"><input type="checkbox" data-pick ${selected.has(item.id) ? "checked" : ""} aria-label="Chuno"></label>` : "";
   return `<article class="card${selected.has(item.id) ? " picked" : ""}" data-id="${esc(item.id)}">
@@ -140,14 +141,35 @@ async function bulkDownload(btn) {
   selected.clear(); refreshPicks();
 }
 
-function render(q) {
+// subject chips: filter the current search results by vishay (no new download)
+let baseResults = [], subjectOn = "", lastQ = "";
+function subjectBar() {
+  if (!baseResults.length) return "";
+  const n = {};
+  baseResults.forEach(r => subjectsOf(r).forEach(s => { n[s] = (n[s] || 0) + 1; }));
+  const keys = Object.keys(n).sort((a, b) => n[b] - n[a]);
+  if (keys.length < 2 && !subjectOn) return "";
+  return `<div class="subjects"><span class="hint">📚 Vishay:</span>` +
+    `<button class="subj${subjectOn ? "" : " on"}" data-subj="">Sab ${baseResults.length.toLocaleString("en-IN")}</button>` +
+    keys.map(k => `<button class="subj${subjectOn === k ? " on" : ""}" data-subj="${k}">${SUBJECT_NAME[k]} ${n[k].toLocaleString("en-IN")}</button>`).join("") + `</div>`;
+}
+function setSubject(k) {
+  subjectOn = k;
+  results = k ? baseResults.filter(r => subjectsOf(r).includes(k)) : baseResults.slice();
+  shown = PAGE;
+  render(lastQ, true);
+}
+
+function render(q, keepSubject) {
+  if (!keepSubject) { baseResults = results.slice(); subjectOn = ""; lastQ = q || ""; }
   const box = $("#results");
   setTimeout(bulkBar, 0);
-  if (!results.length) { box.innerHTML = `<p class="empty">Kuch nahi mila. Doosre shabd ya saal try karo.</p>`; return; }
-  box.innerHTML = results.slice(0, shown).map(r => card(r, q)).join("") +
+  if (!results.length) { box.innerHTML = subjectBar() + `<p class="empty">Kuch nahi mila. Doosre shabd ya saal try karo.</p>`; box.querySelectorAll("[data-subj]").forEach(b => b.onclick = () => setSubject(b.dataset.subj)); return; }
+  box.innerHTML = subjectBar() + results.slice(0, shown).map(r => card(r, q)).join("") +
     (shown < results.length ? `<button class="btn more" id="more">Aur dikhao (${results.length - shown} baaki)</button>` : "");
   const more = $("#more");
-  if (more) more.onclick = () => { shown += PAGE; render(q); };
+  if (more) more.onclick = () => { shown += PAGE; render(q, true); };
+  box.querySelectorAll("[data-subj]").forEach(b => b.onclick = () => setSubject(b.dataset.subj));
 }
 
 $("#view").addEventListener("change", e => {
