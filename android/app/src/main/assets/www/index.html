@@ -25,6 +25,7 @@
       <select id="from" aria-label="Se saal"></select>
       <select id="to" aria-label="Tak saal"></select>
     </div>
+    <div class="row dates"><label>📅 Tareekh se<input id="d1" type="date"></label><label>tak<input id="d2" type="date"></label></div>
     <button id="go" class="btn primary wide">🔍 Dhoondho</button>
     <p class="hint">🔤 Hindi ya English dono mein likh sakte ho.</p>
     <p class="hint" id="status">Supreme Court ke ~43,000 judgments (1950 se). Pehli baar data download hoga, phir phone mein rahega.</p>
@@ -34,8 +35,10 @@
 
 <template id="tpl-hc">
   <section class="panel">
+    <div class="modes"><button data-mode="name" class="on">🔍 Naam / vishay</button><button data-mode="date">📅 Tareekh</button><button data-mode="cnr">🆔 CNR</button></div>
     <select id="court" aria-label="High Court"></select>
-    <select id="year" aria-label="Saal"></select>
+    <select id="year" aria-label="Saal" data-show="name"></select>
+    <div class="row dates" data-show="date" hidden><label>Se<input id="d1" type="date"></label><label>Tak<input id="d2" type="date"></label></div>
     <input id="q" class="search" type="search" placeholder="Party / case no. / vishay — Hindi ya English (जैसे: राम लाल, जमानत)" autocomplete="off">
     <button id="go" class="btn primary wide">🔍 Dhoondho</button>
     <p class="hint" id="status">Court aur saal chuno. Us saal ki list download hogi, phir uske andar search.</p>
