@@ -201,6 +201,13 @@ async function showSC() {
   from.insertAdjacentHTML("beforeend", `<option value="${y0}">Se: ${y0}</option>`); opts(from);
   to.insertAdjacentHTML("beforeend", `<option value="${y1}">Tak: ${y1}</option>`); opts(to);
   if (m) status(`Supreme Court: ${m.sc.count.toLocaleString("en-IN")} judgments · data ${m.updated_utc.slice(0, 10)}`);
+  let scMode = "name";
+  document.querySelectorAll(".modes button").forEach(bt => bt.onclick = () => {
+    scMode = bt.dataset.mode;
+    document.querySelectorAll(".modes button").forEach(x => x.classList.toggle("on", x === bt));
+    document.querySelectorAll("[data-show]").forEach(e => { e.hidden = e.dataset.show !== scMode; });
+    $("#q").placeholder = scMode === "cnr" ? "CNR number (jaise SCIN010012342020)" : scMode === "date" ? "Naam / vishay (khaali chhodo to us tareekh ke sab)" : "Party / case no. / vishay — Hindi ya English (जैसे: राम लाल, जमानत)";
+  });
   const run = async () => {
     const q = $("#q").value.trim();
     busy("Supreme Court data khul raha hai… (pehli baar thoda time)");
@@ -208,8 +215,17 @@ async function showSC() {
     try { data = await getJSON(m ? m.sc.file : "sc.json.gz"); } catch (e) { status("❌ Data download nahi hua. Internet check karo."); return; }
     if (!data.items) data.items = data.rows.map(scItem);
     let a = Math.min(+from.value, +to.value), b = Math.max(+from.value, +to.value);
-    const d1 = $("#d1").value, d2 = $("#d2").value;
-    if (d1 || d2) { a = d1 ? +d1.slice(0, 4) : a; b = d2 ? +d2.slice(0, 4) : b; } // calendar dates win over year boxes
+    let d1 = "", d2 = "";
+    if (scMode === "date") {
+      d1 = $("#d1").value; d2 = $("#d2").value || d1;
+      if (!d1) { status("📅 Pehle 'Se' tareekh chuno"); return; }
+      if (d2 < d1) [d1, d2] = [d2, d1];
+      a = +d1.slice(0, 4); b = +d2.slice(0, 4);
+    }
+    if (scMode === "cnr") {
+      if (!cnrOf(q)) { status("🆔 Sahi CNR likho: 4 akshar + 12 ank (jaise SCIN010012342020)"); return; }
+      a = 0; b = 9999;
+    }
     const ok = q ? matcher(q) : () => true;
     results = data.items.filter(it => { const y = +it.date.slice(0, 4); return y >= a && y <= b && inDates(it, d1, d2) && ok(it); });
     shown = PAGE;
